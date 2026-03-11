@@ -1,0 +1,19 @@
+# Local config (copy from config/client.env.example)
+config/client.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Logs
+*.log
+
+# Test/metrics output artifacts
+llm_metrics_artifacts/*.json
+llm_metrics_artifacts/*.png
+llm_test_results_*.txt
+
+# OS
+.DS_Store
