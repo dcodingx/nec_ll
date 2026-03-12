@@ -117,12 +117,17 @@ if ! "${PYTHON_BIN}" -c 'import ensurepip' 2>/dev/null; then
 fi
 
 VENV="${INSTALL_DIR}/.venv"
+# Remove any incomplete/corrupt venv from a previous failed run
+if [[ -d "${VENV}" && ! -f "${VENV}/bin/activate" ]]; then
+    warn "Incomplete venv found at ${VENV} — removing and recreating …"
+    rm -rf "${VENV}"
+fi
 if [[ ! -d "${VENV}" ]]; then
     info "Creating venv at ${VENV} …"
     "${PYTHON_BIN}" -m venv "${VENV}" \
         || error "venv creation failed. Try manually: ${PYTHON_BIN} -m venv ${VENV}"
 fi
-[[ -f "${VENV}/bin/activate" ]] || error "venv created but activate script missing at ${VENV}/bin/activate"
+[[ -f "${VENV}/bin/activate" ]] || error "venv still missing activate script — check python${PYTHON_VER}-venv installation."
 source "${VENV}/bin/activate"
 pip install --upgrade pip --quiet
 # Install vLLM first (GPU binary, ~2GB)
