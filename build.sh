@@ -56,9 +56,17 @@ info "Log: ${LOG}"
 # ── Pre-flight checks ────────────────────────────────────────
 [[ -d "${INSTALL_DIR}" ]]     || error "Install dir not found: ${INSTALL_DIR}. Run setup.sh first."
 [[ -f "${VENV}/bin/python" ]] || error "venv not found: ${VENV}. Run setup.sh first."
-[[ -d "${MODEL_DIR}" ]]       || error "Model dir not found: ${MODEL_DIR}. Run setup.sh first."
 command -v openssl >/dev/null || error "openssl not found. Install: apt install openssl"
 command -v split   >/dev/null || error "split not found. Install: apt install coreutils"
+
+# Model dir only required if encryption hasn't run yet
+ENC_PARTS_EXIST=0
+ls "${MODEL_ENC_PREFIX}"* > /dev/null 2>&1 && ENC_PARTS_EXIST=1
+if [[ $ENC_PARTS_EXIST -eq 0 ]]; then
+    [[ -d "${MODEL_DIR}" ]] || error "Model dir not found: ${MODEL_DIR} and no encrypted parts found. Run setup.sh first."
+else
+    info "Encrypted parts already exist — skipping model dir check."
+fi
 command -v shred   >/dev/null || error "shred not found. Install: apt install coreutils"
 
 # Verify openssl supports AES-256-CBC + PBKDF2 (requires openssl >= 1.1.1)
@@ -152,8 +160,11 @@ info "Model source : ${MODEL_DIR}"
 info "Encrypted to : ${MODEL_ENC_PREFIX}*"
 info "This will take several minutes for a ~15GB model …"
 
-# Remove any previous partial encrypt artifacts
-rm -f "${MODEL_ENC_PREFIX}"*
+# Skip if already encrypted
+if ls "${MODEL_ENC_PREFIX}"* > /dev/null 2>&1; then
+    PART_COUNT=$(ls "${MODEL_ENC_PREFIX}"* | wc -l)
+    info "Encrypted parts already present (${PART_COUNT} parts) — skipping encryption."
+else
 
 # Stream: tar → openssl AES-256-CBC/PBKDF2 → split into PART_SIZE chunks
 # -pass file: reads passphrase from key file (no key in command line / process list)
@@ -163,25 +174,26 @@ tar -czf - -C "${MODEL_STORE}" "LLM_Q3_V1" | \
     split -b "${PART_SIZE}" - "${MODEL_ENC_PREFIX}"
 
 PART_COUNT=$(ls "${MODEL_ENC_PREFIX}"* 2>/dev/null | wc -l)
-PART_SIZE_TOTAL=$(du -sh "${MODEL_STORE}"/LLM_Q3_V1.bin.enc.part_* 2>/dev/null | tail -1 | cut -f1 || echo "?")
 info "Encrypted into ${PART_COUNT} part(s): ${MODEL_ENC_PREFIX}*"
+fi  # end skip-if-already-encrypted
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 section "4/5  Shredding plaintext model from disk"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-info "Shredding weight files (this may take a few minutes) …"
-# Shred the large weight files (safetensors / .bin) securely
-find "${MODEL_DIR}" -type f \( \
-    -name "*.safetensors" \
-    -o -name "*.bin" \
-    -o -name "*.pt" \
-    -o -name "*.gguf" \
-\) -exec shred -uz {} \; 2>/dev/null && true
-
-# Remove remaining (config, tokenizer etc — not sensitive but clean up)
-rm -rf "${MODEL_DIR}"
-info "Plaintext model removed from disk."
+if [[ -d "${MODEL_DIR}" ]]; then
+    info "Removing plaintext model from disk …"
+    find "${MODEL_DIR}" -type f \( \
+        -name "*.safetensors" \
+        -o -name "*.bin" \
+        -o -name "*.pt" \
+        -o -name "*.gguf" \
+    \) -delete 2>/dev/null || true
+    rm -rf "${MODEL_DIR}"
+    info "Plaintext model removed from disk."
+else
+    info "Plaintext model already removed — skipping."
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 section "5/5  Installing secure launcher and updating systemd"
