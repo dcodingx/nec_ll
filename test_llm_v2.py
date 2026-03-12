@@ -21,10 +21,25 @@ import subprocess
 import copy
 from datetime import datetime
 
-# Configuration
+# Configuration — talks directly to vLLM (no wrapper needed)
 MODEL_NAME = "LLM_Q3_V1"
-LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "http://localhost:8005")
-LLM_QUERY_ENDPOINT = f"{LLM_API_BASE_URL}/llm_testing"
+LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "http://localhost:8004")
+LLM_QUERY_ENDPOINT = f"{LLM_API_BASE_URL}/v1/chat/completions"
+
+# ── IT Support System Prompts ────────────────────────────────
+EN_SYSTEM_PROMPT = (
+    "You are a calm and polite IT Support Voice Assistant. "
+    "Help the user troubleshoot their computer problem step by step. "
+    "Give only one instruction at a time and wait for the user's response. "
+    "Always respond in English."
+)
+
+JA_SYSTEM_PROMPT = (
+    "あなたは、落ち着いて丁寧に対応するITサポート音声アシスタントです。"
+    "ユーザーのパソコンの問題をステップごとにトラブルシューティングしてください。"
+    "一度に一つの指示のみ出し、ユーザーの返答を待ってください。"
+    "必ず日本語で回答してください。"
+)
 _default_output = f"llm_test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 OUTPUT_FILE = os.getenv("OUTPUT_FILE", _default_output)
 METRICS_DIR = os.getenv("METRICS_DIR", "llm_metrics_artifacts")
@@ -454,15 +469,26 @@ def query_llm(query_data, use_full_prompt=USE_FULL_PROMPTS):
     start_time = time.perf_counter()
     
     try:
+        # Build system prompt based on language
+        if language == "ja":
+            sys_content = JA_SYSTEM_PROMPT
+        else:
+            sys_content = EN_SYSTEM_PROMPT
+
+        messages = [
+            {"role": "system", "content": sys_content},
+            {"role": "user",   "content": text},
+        ]
+        # Inject conversation history if provided
+        if query_data.get("messages"):
+            messages = query_data["messages"]
+
         payload = {
-            "text": text,
-            "language": language,
-            "use_full_prompt": use_full_prompt
+            "model": MODEL_NAME,
+            "messages": messages,
+            "temperature": 0.7,
+            "max_tokens": 512,
         }
-        if query_data.get("conversation_id") is not None:
-            payload["conversation_id"] = query_data["conversation_id"]
-        if query_data.get("turn_id") is not None:
-            payload["turn_id"] = query_data["turn_id"]
 
         response = requests.post(
             LLM_QUERY_ENDPOINT,
@@ -470,9 +496,17 @@ def query_llm(query_data, use_full_prompt=USE_FULL_PROMPTS):
             headers={"Content-Type": "application/json"},
             timeout=120
         )
-        
+
         response.raise_for_status()
-        result = response.json()
+        raw = response.json()
+        # Normalise to the shape the rest of the code expects
+        reply_text = raw["choices"][0]["message"]["content"]
+        usage = raw.get("usage", {})
+        result = {
+            "response": reply_text,
+            "tokens_generated": usage.get("completion_tokens", len(reply_text.split())),
+            "input_tokens": usage.get("prompt_tokens", 0),
+        }
         
     except requests.exceptions.Timeout:
         end_time = time.perf_counter()
