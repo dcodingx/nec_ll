@@ -95,6 +95,13 @@ info "Config written to ${INSTALL_DIR}/client.env"
 # ━━━ 2/5  Python venv + vLLM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
 info "━━━ 2/5  Installing Python venv + vLLM (this takes ~10 min) ━━━"
+
+# Ensure python3-venv is available (requires root — setup.sh already runs with sudo)
+if ! python3 -m venv --help > /dev/null 2>&1; then
+    info "python3-venv not found — installing via apt …"
+    apt-get install -y python3-venv python3-pip
+fi
+
 VENV="${INSTALL_DIR}/.venv"
 if [[ ! -d "${VENV}" ]]; then
     python3 -m venv "${VENV}"
