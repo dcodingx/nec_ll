@@ -59,25 +59,9 @@ LLM_CUDA_DEVICE="${LLM_CUDA_DEVICE:-0}"
 LLM_GPU_MEM="${LLM_GPU_MEM:-0.90}"
 HF_TOKEN="${HF_TOKEN:-}"  # LLM_Q3_V1 is public — no token needed
 
-# ━━━ 1/5  Download model from HuggingFace ━━━━━━━━━━━━━━━━━━
+# ━━━ 1/5  Install to ${INSTALL_DIR} ━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
-info "━━━ 1/5  Downloading model from HuggingFace ━━━"
-if [[ -f "${LLM_MODEL_PATH}/config.json" ]]; then
-    info "Model already present at ${LLM_MODEL_PATH} — skipping download."
-else
-    info "Downloading ${HF_MODEL_ID} → ${LLM_MODEL_PATH}"
-    info "This may take 10–30 minutes …"
-    HF_MODEL_ID="${HF_MODEL_ID}" \
-    LLM_MODEL_PATH="${LLM_MODEL_PATH}" \
-    HF_TOKEN="${HF_TOKEN}" \
-        python3 "${SCRIPT_DIR}/download_model.py" \
-        || error "Model download failed. Check ${LOG} and re-run setup.sh."
-fi
-info "Model ready: ${LLM_MODEL_PATH}"
-
-# ━━━ 2/5  Install to ${INSTALL_DIR} ━━━━━━━━━━━━━━━━━━━━━━━━
-echo ""
-info "━━━ 2/5  Installing to ${INSTALL_DIR} ━━━"
+info "━━━ 1/5  Installing to ${INSTALL_DIR} ━━━"
 sudo mkdir -p "${INSTALL_DIR}"
 sudo cp -r "${SCRIPT_DIR}/." "${INSTALL_DIR}/"
 sudo chmod +x "${INSTALL_DIR}/start_vllm_llm_v2.sh"
@@ -96,9 +80,9 @@ LLM_API_BASE_URL=http://localhost:${LLM_API_PORT}
 EOF
 info "Config written to ${INSTALL_DIR}/client.env"
 
-# ━━━ 3/5  Python venv + vLLM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━ 2/5  Python venv + vLLM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
-info "━━━ 3/5  Installing Python venv + vLLM (this takes ~10 min) ━━━"
+info "━━━ 2/5  Installing Python venv + vLLM (this takes ~10 min) ━━━"
 VENV="${INSTALL_DIR}/.venv"
 if [[ ! -d "${VENV}" ]]; then
     python3 -m venv "${VENV}"
@@ -113,7 +97,21 @@ pip install fastapi "uvicorn[standard]" httpx psutil pydantic \
 deactivate
 info "venv installed at ${VENV}"
 
-# ━━━ 4/5  Write wrapper launcher + vLLM readiness probe ━━━━
+# ━━━ 3/5  Download model from HuggingFace (uses venv Python) ━
+echo ""
+info "━━━ 3/5  Downloading model from HuggingFace ━━━"
+if [[ -f "${LLM_MODEL_PATH}/config.json" ]]; then
+    info "Model already present at ${LLM_MODEL_PATH} — skipping download."
+else
+    info "Downloading ${HF_MODEL_ID} → ${LLM_MODEL_PATH}"
+    info "This may take 10–30 minutes …"
+    HF_MODEL_ID="${HF_MODEL_ID}" \
+    LLM_MODEL_PATH="${LLM_MODEL_PATH}" \
+    HF_TOKEN="${HF_TOKEN}" \
+        "${INSTALL_DIR}/.venv/bin/python" "${INSTALL_DIR}/download_model.py" \
+        || error "Model download failed. Check ${LOG} and re-run setup.sh."
+fi
+info "Model ready: ${LLM_MODEL_PATH}"
 echo ""
 info "━━━ 4/5  Writing launcher scripts ━━━"
 
