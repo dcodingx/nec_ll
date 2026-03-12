@@ -62,7 +62,7 @@ else
     warn "Copy config/client.env.example → config/client.env and edit it first."
 fi
 
-HF_MODEL_ID="${HF_MODEL_ID:-shisa-ai/LLM_Q3_V1}"
+HF_MODEL_ID="${HF_MODEL_ID:-shisa-ai/shisa-v2-qwen2.5-7b}"
 LLM_MODEL_PATH="${LLM_MODEL_PATH:-/opt/voicebot/models/LLM_Q3_V1}"
 LLM_MODEL_NAME="${LLM_MODEL_NAME:-LLM_Q3_V1}"
 LLM_PORT="${LLM_PORT:-8004}"
