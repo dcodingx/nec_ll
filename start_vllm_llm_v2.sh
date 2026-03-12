@@ -16,18 +16,19 @@
 set -euo pipefail
 
 MODEL="${LLM_MODEL_PATH:-/opt/voicebot/models/shisa-v2-qwen2.5-7b}"
+SERVED_NAME="${LLM_MODEL_NAME:-shisa-v2-qwen2.5-7b}"
 PORT="${LLM_PORT:-8004}"
 GPU_MEM="${LLM_GPU_MEM:-0.90}"
 export CUDA_VISIBLE_DEVICES="${LLM_CUDA_DEVICE:-0}"
 
-echo "Starting shisa-v2-qwen2.5-7b vLLM server on port ${PORT} …"
+echo "Starting ${SERVED_NAME} vLLM server on port ${PORT} …"
 echo "  Model : ${MODEL}"
 echo "  GPU   : cuda:${CUDA_VISIBLE_DEVICES}"
 echo "  Mem   : ${GPU_MEM}"
 
 exec python -m vllm.entrypoints.openai.api_server \
     --model "${MODEL}" \
-    --served-model-name shisa-v2-qwen2.5-7b \
+    --served-model-name "${SERVED_NAME}" \
     --port "${PORT}" \
     --gpu-memory-utilization "${GPU_MEM}" \
     --max-model-len 8192 \

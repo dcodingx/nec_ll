@@ -30,6 +30,7 @@ fi
 
 LLM_PORT="${LLM_PORT:-8004}"
 LLM_API_PORT="${LLM_API_PORT:-8005}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-shisa-v2-qwen2.5-7b}"
 TIMEOUT=30   # seconds per request
 
 # ── Colors ────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ fail() { echo -e "${RED}[FAIL]${NC} $*"; (( FAIL++ )) || true; }
 info() { echo -e "${YELLOW}[INFO]${NC} $*"; }
 
 echo "============================================================"
-echo "  shisa-v2-qwen2.5-7b — Health Check"
+echo "  ${LLM_MODEL_NAME} — Health Check"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "============================================================"
 
@@ -62,10 +63,10 @@ info "Check 2/4 — vLLM model listing"
 MODELS_RESP=$(curl -sf --max-time "${TIMEOUT}" \
     "http://localhost:${LLM_PORT}/v1/models" 2>&1) && rc=0 || rc=$?
 if [[ ${rc} -eq 0 ]]; then
-    if echo "${MODELS_RESP}" | grep -q "shisa-v2-qwen2.5-7b"; then
-        pass "Model 'shisa-v2-qwen2.5-7b' is loaded and listed"
+    if echo "${MODELS_RESP}" | grep -q "${LLM_MODEL_NAME}"; then
+        pass "Model '${LLM_MODEL_NAME}' is loaded and listed"
     else
-        fail "Connected to vLLM but 'shisa-v2-qwen2.5-7b' not in model list"
+        fail "Connected to vLLM but '${LLM_MODEL_NAME}' not in model list"
         echo "     Response: ${MODELS_RESP}"
     fi
 else

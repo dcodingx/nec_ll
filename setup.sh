@@ -162,7 +162,7 @@ info "━━━ 5/5  Installing systemd services ━━━"
 # vLLM service
 sudo tee /etc/systemd/system/voicebot-llm.service > /dev/null <<EOF
 [Unit]
-Description=VoiceBot LLM vLLM Server (shisa-v2-qwen2.5-7b)
+Description=VoiceBot LLM vLLM Server (${LLM_MODEL_NAME})
 After=network.target
 
 [Service]
@@ -172,7 +172,7 @@ WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${INSTALL_DIR}/client.env
 ExecStart=${INSTALL_DIR}/.venv/bin/python -m vllm.entrypoints.openai.api_server \\
     --model ${LLM_MODEL_PATH} \\
-    --served-model-name shisa-v2-qwen2.5-7b \\
+    --served-model-name ${LLM_MODEL_NAME} \\
     --port ${LLM_PORT} \\
     --gpu-memory-utilization ${LLM_GPU_MEM} \\
     --max-model-len 8192 \\
@@ -188,7 +188,7 @@ EOF
 # Wrapper service
 sudo tee /etc/systemd/system/voicebot-llm-wrapper.service > /dev/null <<EOF
 [Unit]
-Description=VoiceBot LLM API Wrapper (shisa-v2-qwen2.5-7b)
+Description=VoiceBot LLM API Wrapper (${LLM_MODEL_NAME})
 After=voicebot-llm.service
 Requires=voicebot-llm.service
 
@@ -220,7 +220,7 @@ sudo systemctl start voicebot-llm-wrapper
 echo ""
 echo "============================================================"
 info "Setup complete!"
-info "  vLLM server  : http://localhost:${LLM_PORT}  (model: shisa-v2-qwen2.5-7b)"
+info "  vLLM server  : http://localhost:${LLM_PORT}  (model: ${LLM_MODEL_NAME})"
 info "  API wrapper  : http://localhost:${LLM_API_PORT}"
 echo ""
 info "Check status:"
