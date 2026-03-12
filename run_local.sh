@@ -87,20 +87,68 @@ LLM_API_BASE_URL=http://localhost:${LLM_API_PORT}
 EOF
 info "Config written to ${INSTALL_DIR}/client.env"
 
-# ━━━ 2/4  Python venv + dependencies ━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━ 2/4  Python environment + dependencies ━━━━━━━━━━━━━━━━━
 echo ""
-info "━━━ 2/4  Installing Python venv + vLLM (first run takes ~10 min) ━━━"
+info "━━━ 2/4  Setting up Python environment + vLLM (first run takes ~10 min) ━━━"
 VENV="${INSTALL_DIR}/.venv"
-if [[ ! -d "${VENV}" ]]; then
-    python3 -m venv "${VENV}"
+CONDA_DIR="${HOME}/miniconda3"
+PYTHON_BIN=""
+
+# ── Try python3 -m venv first (fast) ────────────────────────
+if python3 -m venv "${VENV}" 2>/dev/null; then
+    info "Using system Python venv."
+    PYTHON_BIN="${VENV}/bin/python"
+    source "${VENV}/bin/activate"
+    pip install --upgrade pip --quiet
+    pip install vllm --quiet
+    pip install fastapi "uvicorn[standard]" httpx psutil pydantic \
+                requests matplotlib Pillow huggingface_hub --quiet
+    deactivate
+    info "venv ready: ${VENV}"
+
+# ── Fallback: Miniconda (no sudo needed) ────────────────────
+else
+    warn "python3-venv not available. Installing Miniconda to ${CONDA_DIR} (no sudo needed)."
+    if [[ ! -f "${CONDA_DIR}/bin/conda" ]]; then
+        MINICONDA_INSTALLER="${HOME}/miniconda_installer.sh"
+        info "Downloading Miniconda installer …"
+        curl -fsSL "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh" \
+            -o "${MINICONDA_INSTALLER}"
+        bash "${MINICONDA_INSTALLER}" -b -p "${CONDA_DIR}"
+        rm -f "${MINICONDA_INSTALLER}"
+        info "Miniconda installed at ${CONDA_DIR}"
+    else
+        info "Miniconda already installed at ${CONDA_DIR}"
+    fi
+
+    # Add conda to PATH for this session
+    export PATH="${CONDA_DIR}/bin:${PATH}"
+
+    # Create conda env if not exists
+    CONDA_ENV_NAME="shisa-llm"
+    if ! conda env list | grep -q "^${CONDA_ENV_NAME} "; then
+        info "Creating conda env '${CONDA_ENV_NAME}' with Python 3.10 …"
+        conda create -y -n "${CONDA_ENV_NAME}" python=3.10 --quiet
+    else
+        info "Conda env '${CONDA_ENV_NAME}' already exists."
+    fi
+
+    # Use conda env's pip to install packages
+    CONDA_PYTHON="${CONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/python"
+    CONDA_PIP="${CONDA_DIR}/envs/${CONDA_ENV_NAME}/bin/pip"
+    info "Installing vLLM and dependencies into conda env …"
+    "${CONDA_PIP}" install --upgrade pip --quiet
+    "${CONDA_PIP}" install vllm --quiet
+    "${CONDA_PIP}" install fastapi "uvicorn[standard]" httpx psutil pydantic \
+                requests matplotlib Pillow huggingface_hub --quiet
+
+    # Point VENV bin to the conda env so the rest of the script works unchanged
+    VENV="${CONDA_DIR}/envs/${CONDA_ENV_NAME}"
+    PYTHON_BIN="${CONDA_PYTHON}"
+    info "Conda env ready: ${VENV}"
 fi
-source "${VENV}/bin/activate"
-pip install --upgrade pip --quiet
-pip install vllm --quiet
-pip install fastapi "uvicorn[standard]" httpx psutil pydantic \
-            requests matplotlib Pillow huggingface_hub --quiet
-deactivate
-info "venv ready: ${VENV}"
+
+PYTHON_BIN="${PYTHON_BIN:-${VENV}/bin/python}"
 
 # ━━━ 3/4  Download model (skipped if already present) ━━━━━━━
 echo ""
@@ -113,7 +161,7 @@ else
     HF_MODEL_ID="${HF_MODEL_ID}" \
     LLM_MODEL_PATH="${LLM_MODEL_PATH}" \
     HF_TOKEN="${HF_TOKEN}" \
-        "${VENV}/bin/python" "${INSTALL_DIR}/download_model.py" \
+        "${PYTHON_BIN}" "${INSTALL_DIR}/download_model.py" \
         || error "Model download failed. Check ${LOG}."
 fi
 info "Model ready: ${LLM_MODEL_PATH}"
@@ -135,7 +183,7 @@ done
 # Start vLLM
 info "Starting vLLM on port ${LLM_PORT} …"
 CUDA_VISIBLE_DEVICES="${LLM_CUDA_DEVICE}" \
-    nohup "${VENV}/bin/python" -m vllm.entrypoints.openai.api_server \
+    nohup "${PYTHON_BIN}" -m vllm.entrypoints.openai.api_server \
         --model "${LLM_MODEL_PATH}" \
         --served-model-name "${LLM_MODEL_NAME}" \
         --port "${LLM_PORT}" \
@@ -165,7 +213,7 @@ done
 info "Starting API wrapper on port ${LLM_API_PORT} …"
 source "${INSTALL_DIR}/client.env"
 export LLM_MODEL_NAME LLM_MODEL_PATH LLM_VLLM_BASE_URL LLM_API_PORT
-nohup "${VENV}/bin/python" "${INSTALL_DIR}/llm_api_wrapper_v2.py" \
+nohup "${PYTHON_BIN}" "${INSTALL_DIR}/llm_api_wrapper_v2.py" \
     >> "${HOME}/wrapper.log" 2>&1 &
 echo $! > "${WRAPPER_PID_FILE}"
 info "Wrapper started (PID $(cat "${WRAPPER_PID_FILE}")) — logs: ~/wrapper.log"
@@ -183,7 +231,7 @@ LLM_PORT="${LLM_PORT}" LLM_API_PORT="${LLM_API_PORT}" LLM_MODEL_NAME="${LLM_MODE
 echo ""
 info "Running test suite …"
 LLM_API_BASE_URL="http://localhost:${LLM_API_PORT}" \
-    "${VENV}/bin/python" "${INSTALL_DIR}/test_llm_v2.py"
+    "${PYTHON_BIN}" "${INSTALL_DIR}/test_llm_v2.py"
 
 echo ""
 info "All done! Services are running in the background."
