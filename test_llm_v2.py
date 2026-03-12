@@ -18,6 +18,7 @@ import json
 import importlib
 import concurrent.futures
 import subprocess
+import copy
 from datetime import datetime
 
 # Configuration
@@ -30,12 +31,13 @@ METRICS_DIR = os.getenv("METRICS_DIR", "llm_metrics_artifacts")
 
 # Test Configuration
 USE_FULL_PROMPTS = True  # Set to True to use full IT Support system prompts
-CONCURRENT_WORKERS = 5   # Number of concurrent requests for load testing
+CONCURRENT_WORKERS = 10   # Number of concurrent requests for load testing
 STABILITY_TEST_DURATION = 2100  # Duration in seconds (300 = 5 minutes, 1800 = 30 minutes, 2100 = 35 minutes)
 STABILITY_TEST_INTERVAL = 10   # Interval between requests in seconds
-CONVERSATION_SESSION_WORKERS = 5  # Concurrent multi-turn sessions for conversation load testing
+CONVERSATION_SESSION_WORKERS = 10  # Concurrent multi-turn sessions for conversation load testing
+CONVERSATION_SESSION_COUNT = 10  # Total multi-turn sessions to run in conversation load test
 SINGLE_REQUEST_SAMPLE_COUNT = 3  # Keep 2-3 single request samples for quick baseline checks
-CONCURRENT_REQUEST_SAMPLE_COUNT = 3  # Keep a few one-shot concurrent requests for comparison
+CONCURRENT_REQUEST_SAMPLE_COUNT = 10  # Use enough requests to exercise all concurrent workers
 TERMINAL_DETAILED_PER_HIT = False  # Keep terminal concise; full per-hit details are written to txt
 TERMINAL_STABILITY_LOG_EVERY = 5  # Print every N stability hits (and always print failures)
 
@@ -135,6 +137,35 @@ TEST_CONVERSATION_SESSIONS = [
         ],
     },
 ]
+
+
+def expand_queries_for_load(base_queries, target_count):
+    """Expand one-shot queries to the desired count by round-robin replication."""
+    if target_count <= 0:
+        return []
+    if not base_queries:
+        return []
+
+    expanded = []
+    for idx in range(target_count):
+        expanded.append(base_queries[idx % len(base_queries)])
+    return expanded
+
+
+def expand_conversation_sessions(base_sessions, target_count):
+    """Expand conversation sessions to the desired count with unique session names."""
+    if target_count <= 0:
+        return []
+    if not base_sessions:
+        return []
+
+    expanded = []
+    for idx in range(target_count):
+        session = copy.deepcopy(base_sessions[idx % len(base_sessions)])
+        base_name = session.get("session_name", f"session_{idx+1}")
+        session["session_name"] = f"{base_name}__rep_{idx+1}"
+        expanded.append(session)
+    return expanded
 
 
 def estimate_tokens_from_text(text, language):
@@ -637,6 +668,11 @@ def run_concurrent_conversation_sessions(sessions, max_workers=CONVERSATION_SESS
 
 
 if __name__ == "__main__":
+    conversation_test_sessions = expand_conversation_sessions(
+        TEST_CONVERSATION_SESSIONS,
+        CONVERSATION_SESSION_COUNT,
+    )
+
     print("="*80)
     print(f"LLM Matrix Test Suite - {MODEL_NAME}")
     print("="*80)
@@ -646,7 +682,7 @@ if __name__ == "__main__":
     print(f"Single Request Samples: {SINGLE_REQUEST_SAMPLE_COUNT}")
     print(f"Concurrent One-shot Samples: {CONCURRENT_REQUEST_SAMPLE_COUNT}")
     print(f"Conversation Session Workers: {CONVERSATION_SESSION_WORKERS}")
-    print(f"Conversation Sessions: {len(TEST_CONVERSATION_SESSIONS)}")
+    print(f"Conversation Sessions: {len(conversation_test_sessions)}")
     print(f"Terminal Detailed Per-hit Logs: {TERMINAL_DETAILED_PER_HIT}")
     print(f"Output File: {OUTPUT_FILE}")
     print(f"Test Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -735,7 +771,10 @@ if __name__ == "__main__":
     print(f"9.3 CONCURRENT REQUEST TEST ({CONCURRENT_WORKERS} workers)")
     print("="*80)
     
-    concurrent_test_queries = TEST_QUERIES[:max(1, CONCURRENT_REQUEST_SAMPLE_COUNT)]
+    concurrent_test_queries = expand_queries_for_load(
+        TEST_QUERIES,
+        max(1, CONCURRENT_REQUEST_SAMPLE_COUNT),
+    )
     concurrent_results, concurrent_time = run_concurrent_queries(concurrent_test_queries, CONCURRENT_WORKERS)
     for r in concurrent_results:
         attach_hit_meta(r, "concurrent_requests")
@@ -758,7 +797,7 @@ if __name__ == "__main__":
     print("="*80)
 
     conversation_results, conversation_time = run_concurrent_conversation_sessions(
-        TEST_CONVERSATION_SESSIONS,
+        conversation_test_sessions,
         CONVERSATION_SESSION_WORKERS,
     )
     for r in conversation_results:
@@ -955,7 +994,7 @@ if __name__ == "__main__":
         f.write(f"Single Request Samples: {SINGLE_REQUEST_SAMPLE_COUNT}\n")
         f.write(f"Concurrent One-shot Samples: {CONCURRENT_REQUEST_SAMPLE_COUNT}\n")
         f.write(f"Conversation Session Workers: {CONVERSATION_SESSION_WORKERS}\n")
-        f.write(f"Conversation Sessions: {len(TEST_CONVERSATION_SESSIONS)}\n")
+        f.write(f"Conversation Sessions: {len(conversation_test_sessions)}\n")
         f.write(f"Stability Test Duration: {STABILITY_TEST_DURATION}s\n")
         f.write(f"Stability Test Interval: {STABILITY_TEST_INTERVAL}s\n\n")
         
