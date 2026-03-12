@@ -96,16 +96,33 @@ info "Config written to ${INSTALL_DIR}/client.env"
 echo ""
 info "━━━ 2/5  Installing Python venv + vLLM (this takes ~10 min) ━━━"
 
-# Ensure python3-venv is available (requires root — setup.sh already runs with sudo)
-if ! python3 -m venv --help > /dev/null 2>&1; then
-    info "python3-venv not found — installing via apt …"
-    apt-get install -y python3-venv python3-pip
+# Detect the Python binary (prefer 3.11 → 3.10 → 3.12 → python3)
+PYTHON_BIN=""
+for py in python3.11 python3.10 python3.12 python3; do
+    if command -v "${py}" > /dev/null 2>&1; then
+        PYTHON_BIN="$(command -v "${py}")"
+        break
+    fi
+done
+[[ -z "${PYTHON_BIN}" ]] && error "No python3 found. Install Python 3.10+ first."
+PYTHON_VER="$("${PYTHON_BIN}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+info "Using Python ${PYTHON_VER} at ${PYTHON_BIN}"
+
+# Ensure python3-venv/ensurepip is available
+if ! "${PYTHON_BIN}" -c 'import ensurepip' 2>/dev/null; then
+    info "ensurepip not found — installing python${PYTHON_VER}-venv via apt …"
+    apt-get update -qq
+    apt-get install -y "python${PYTHON_VER}-venv" python3-pip \
+        || error "Failed to install python${PYTHON_VER}-venv. Run manually: apt install python${PYTHON_VER}-venv"
 fi
 
 VENV="${INSTALL_DIR}/.venv"
 if [[ ! -d "${VENV}" ]]; then
-    python3 -m venv "${VENV}"
+    info "Creating venv at ${VENV} …"
+    "${PYTHON_BIN}" -m venv "${VENV}" \
+        || error "venv creation failed. Try manually: ${PYTHON_BIN} -m venv ${VENV}"
 fi
+[[ -f "${VENV}/bin/activate" ]] || error "venv created but activate script missing at ${VENV}/bin/activate"
 source "${VENV}/bin/activate"
 pip install --upgrade pip --quiet
 # Install vLLM first (GPU binary, ~2GB)
