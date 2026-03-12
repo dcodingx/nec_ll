@@ -5,7 +5,7 @@
 # Run ONCE on the client H100 server after cloning the repo:
 #
 #   git clone <your-repo-url> shisa-llm-deploy
-#   cd shisa-llm-deploy && bash setup.sh
+#   cd shisa-llm-deploy && sudo bash setup.sh
 #
 # What this script does:
 #   1. Loads config from config/client.env
@@ -22,6 +22,18 @@
 #   - Internet access for HuggingFace download (or a pre-downloaded model)
 # ============================================================
 set -euo pipefail
+
+# ── Root / sudo check ────────────────────────────────────────
+if [[ $EUID -ne 0 ]]; then
+  echo "[ERROR] This script must be run with sudo or as root."
+  echo "        Please re-run:"
+  echo ""
+  echo "          sudo bash setup.sh"
+  echo ""
+  echo "        If your account lacks sudo privileges, ask a system admin to"
+  echo "        run this script, or run: sudo usermod -aG sudo \$USER && newgrp sudo"
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="/opt/shisa-llm-deploy"
