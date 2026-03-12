@@ -86,8 +86,9 @@ mkdir -p "${OBFUSC_OUT}"
 
 cd "${INSTALL_DIR}"
 
-# Files to obfuscate
-PYTHON_FILES=("llm_api_wrapper_v2.py" "test_llm_v2.py")
+# Only obfuscate the wrapper (contains business logic + system prompts)
+# test_llm_v2.py is a test utility — no sensitive logic, no need to obfuscate
+PYTHON_FILES=("llm_api_wrapper_v2.py")
 for f in "${PYTHON_FILES[@]}"; do
     if [[ -f "${INSTALL_DIR}/${f}" ]]; then
         info "Obfuscating ${f} …"
