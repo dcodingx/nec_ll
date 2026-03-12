@@ -57,7 +57,7 @@ LLM_PORT="${LLM_PORT:-8004}"
 LLM_API_PORT="${LLM_API_PORT:-8005}"
 LLM_CUDA_DEVICE="${LLM_CUDA_DEVICE:-0}"
 LLM_GPU_MEM="${LLM_GPU_MEM:-0.90}"
-HF_TOKEN="${HF_TOKEN:-}"
+HF_TOKEN="${HF_TOKEN:-}"  # shisa-v2-qwen2.5-7b is public — no token needed
 
 # ━━━ 1/5  Download model from HuggingFace ━━━━━━━━━━━━━━━━━━
 echo ""
