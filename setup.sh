@@ -9,7 +9,7 @@
 #
 # What this script does:
 #   1. Loads config from config/client.env
-#   2. Downloads shisa-v2-qwen2.5-7b from HuggingFace (once)
+#   2. Downloads LLM_Q3_V1 from HuggingFace (once)
 #   3. Creates a Python venv and installs vLLM + dependencies
 #   4. Registers and starts two systemd services:
 #        voicebot-llm         — vLLM server        (port 8004)
@@ -37,7 +37,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*" | tee -a "${LOG}"; exit 1; }
 exec > >(tee -a "${LOG}") 2>&1
 info "Setup log: ${LOG}"
 echo "============================================================"
-echo "  shisa-v2-qwen2.5-7b — Client Setup"
+echo "  LLM_Q3_V1 — Client Setup"
 echo "============================================================"
 
 # ── Load config ──────────────────────────────────────────────
@@ -50,14 +50,14 @@ else
     warn "Copy config/client.env.example → config/client.env and edit it first."
 fi
 
-HF_MODEL_ID="${HF_MODEL_ID:-shisa-ai/shisa-v2-qwen2.5-7b}"
-LLM_MODEL_PATH="${LLM_MODEL_PATH:-/opt/voicebot/models/shisa-v2-qwen2.5-7b}"
-LLM_MODEL_NAME="${LLM_MODEL_NAME:-shisa-v2-qwen2.5-7b}"
+HF_MODEL_ID="${HF_MODEL_ID:-shisa-ai/LLM_Q3_V1}"
+LLM_MODEL_PATH="${LLM_MODEL_PATH:-/opt/voicebot/models/LLM_Q3_V1}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-LLM_Q3_V1}"
 LLM_PORT="${LLM_PORT:-8004}"
 LLM_API_PORT="${LLM_API_PORT:-8005}"
 LLM_CUDA_DEVICE="${LLM_CUDA_DEVICE:-0}"
 LLM_GPU_MEM="${LLM_GPU_MEM:-0.90}"
-HF_TOKEN="${HF_TOKEN:-}"  # shisa-v2-qwen2.5-7b is public — no token needed
+HF_TOKEN="${HF_TOKEN:-}"  # LLM_Q3_V1 is public — no token needed
 
 # ━━━ 1/5  Download model from HuggingFace ━━━━━━━━━━━━━━━━━━
 echo ""

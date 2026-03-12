@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-LLM Test Suite for shisa-v2-qwen2.5-7b
+LLM Test Suite for LLM_Q3_V1
 Tests performance, latency, memory usage, and accuracy
 
-Model: shisa-v2-qwen2.5-7b
+Model: LLM_Q3_V1
 Context: IT Support Voice Assistant
 The LLM helps users troubleshoot computer problems:
 - English: Power issues, error messages, blue screen errors
@@ -21,7 +21,7 @@ import subprocess
 from datetime import datetime
 
 # Configuration
-MODEL_NAME = "shisa-v2-qwen2.5-7b"
+MODEL_NAME = "LLM_Q3_V1"
 LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "http://localhost:8005")
 LLM_QUERY_ENDPOINT = f"{LLM_API_BASE_URL}/llm_testing"
 _default_output = f"llm_test_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"

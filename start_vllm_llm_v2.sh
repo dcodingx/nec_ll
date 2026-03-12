@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Start shisa-v2-qwen2.5-7b via vLLM (OpenAI-compatible API)
+# Start LLM_Q3_V1 via vLLM (OpenAI-compatible API)
 #
 # Prerequisites:
 #   pip install vllm
@@ -15,8 +15,8 @@
 
 set -euo pipefail
 
-MODEL="${LLM_MODEL_PATH:-/opt/voicebot/models/shisa-v2-qwen2.5-7b}"
-SERVED_NAME="${LLM_MODEL_NAME:-shisa-v2-qwen2.5-7b}"
+MODEL="${LLM_MODEL_PATH:-/opt/voicebot/models/LLM_Q3_V1}"
+SERVED_NAME="${LLM_MODEL_NAME:-LLM_Q3_V1}"
 PORT="${LLM_PORT:-8004}"
 GPU_MEM="${LLM_GPU_MEM:-0.90}"
 export CUDA_VISIBLE_DEVICES="${LLM_CUDA_DEVICE:-0}"

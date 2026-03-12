@@ -3,7 +3,7 @@
 FastAPI wrapper for vLLM LLM v2 instance
 Provides simple query endpoint for testing LLM responses
 
-Model Identifier: shisa-v2-qwen2.5-7b
+Model Identifier: LLM_Q3_V1
 Context: IT Support Voice Assistant (Computer Troubleshooting)
 The LLM is configured with system prompts for IT support:
 - Handles: Power issues, error messages, blue screens, computer problems
@@ -27,7 +27,7 @@ class QueryRequest(BaseModel):
     use_full_prompt: bool = False  # Flag to use full IT support prompts
 
 app = FastAPI(
-    title="shisa-v2-qwen2.5-7b Query API",
+    title="LLM_Q3_V1 Query API",
     description="Wrapper for testing LLM queries with configurable system prompts",
     docs_url=None,  # Disable /docs endpoint
     redoc_url=None  # Disable /redoc endpoint
@@ -36,8 +36,8 @@ app = FastAPI(
 # vLLM server configuration
 VLLM_BASE_URL = os.getenv("LLM_VLLM_BASE_URL", "http://localhost:8004/v1")
 VLLM_COMPLETIONS_URL = f"{VLLM_BASE_URL}/chat/completions"
-MODEL_NAME = os.getenv("LLM_MODEL_NAME", "shisa-v2-qwen2.5-7b")
-MODEL_PATH = os.getenv("LLM_MODEL_PATH", "/opt/voicebot/models/shisa-v2-qwen2.5-7b")
+MODEL_NAME = os.getenv("LLM_MODEL_NAME", "LLM_Q3_V1")
+MODEL_PATH = os.getenv("LLM_MODEL_PATH", "/opt/voicebot/models/LLM_Q3_V1")
 
 # Timeout for vLLM requests (in seconds)
 REQUEST_TIMEOUT = 60.0
@@ -779,7 +779,7 @@ async def query_llm_post(request: QueryRequest):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print(f"shisa-v2-qwen2.5-7b API Wrapper - IT Support Assistant")
+    print(f"LLM_Q3_V1 API Wrapper - IT Support Assistant")
     print("=" * 60)
     print(f"Model Name       : {MODEL_NAME}")
     print(f"Model Path       : {MODEL_PATH}")

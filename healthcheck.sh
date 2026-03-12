@@ -30,7 +30,7 @@ fi
 
 LLM_PORT="${LLM_PORT:-8004}"
 LLM_API_PORT="${LLM_API_PORT:-8005}"
-LLM_MODEL_NAME="${LLM_MODEL_NAME:-shisa-v2-qwen2.5-7b}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-LLM_Q3_V1}"
 TIMEOUT=30   # seconds per request
 
 # ── Colors ────────────────────────────────────────────────────

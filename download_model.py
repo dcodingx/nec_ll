@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-One-time download of shisa-ai/shisa-v2-qwen2.5-7b from HuggingFace.
+One-time download of shisa-ai/LLM_Q3_V1 from HuggingFace.
 
 Run this ONCE on the client server before starting vLLM.
 The script is idempotent: if the model is already present it exits immediately.
@@ -9,16 +9,16 @@ Usage:
     python download_model.py
 
 Environment overrides (optional):
-    HF_MODEL_ID   — HuggingFace repo id  (default: shisa-ai/shisa-v2-qwen2.5-7b)
-    LLM_MODEL_PATH — local destination   (default: /opt/voicebot/models/shisa-v2-qwen2.5-7b)
+    HF_MODEL_ID   — HuggingFace repo id  (default: shisa-ai/LLM_Q3_V1)
+    LLM_MODEL_PATH — local destination   (default: /opt/voicebot/models/LLM_Q3_V1)
     HF_TOKEN       — HuggingFace token   (required for private/gated repos)
 """
 
 import os
 import sys
 
-HF_MODEL_ID   = os.getenv("HF_MODEL_ID",    "shisa-ai/shisa-v2-qwen2.5-7b")
-LLM_MODEL_PATH = os.getenv("LLM_MODEL_PATH", "/opt/voicebot/models/shisa-v2-qwen2.5-7b")
+HF_MODEL_ID   = os.getenv("HF_MODEL_ID",    "shisa-ai/LLM_Q3_V1")
+LLM_MODEL_PATH = os.getenv("LLM_MODEL_PATH", "/opt/voicebot/models/LLM_Q3_V1")
 HF_TOKEN       = os.getenv("HF_TOKEN",       None)
 
 SENTINEL_FILE = os.path.join(LLM_MODEL_PATH, "config.json")
@@ -26,7 +26,7 @@ SENTINEL_FILE = os.path.join(LLM_MODEL_PATH, "config.json")
 
 def main():
     print("=" * 60)
-    print("  shisa-v2-qwen2.5-7b — Model Download")
+    print("  LLM_Q3_V1 — Model Download")
     print("=" * 60)
     print(f"  Source : {HF_MODEL_ID}")
     print(f"  Target : {LLM_MODEL_PATH}")
