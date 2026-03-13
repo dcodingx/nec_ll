@@ -4,6 +4,13 @@
 # vLLM inference engine (installed by setup.sh — not listed here to avoid CPU-only build)
 # vllm
 
+# vLLM internal dependencies — required by vllm itself, NOT optional. Do NOT remove.
+# fastapi/uvicorn: vLLM's OpenAI API server IS a FastAPI app
+# huggingface_hub: vLLM imports it in arg_utils.py even for local model paths
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+huggingface_hub>=0.23.0
+
 # Test suite
 requests>=2.31.0
 psutil>=5.9.0
