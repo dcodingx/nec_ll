@@ -941,6 +941,8 @@ if __name__ == "__main__":
     throughputs = [r['throughput_tps'] for r in successful if r['throughput_tps'] > 0]
     response_lengths = [r['response_length'] for r in successful]
     ttft_list = [r.get('ttft_ms', 0.0) for r in successful if r.get('ttft_ms') is not None]
+    first_token_speed_list = [r.get('first_token_speed_per_s', 0.0) for r in successful if r.get('first_token_speed_per_s', 0.0) > 0]
+    kw_results = [r for r in all_results if r.get('keyword_accuracy') is not None]
     input_chars_list = [r.get('input_chars', 0) for r in all_results]
     input_tokens_list = [r.get('input_tokens_est', 0) for r in all_results]
     input_bytes_list = [r.get('input_bytes', 0) for r in all_results]
@@ -967,7 +969,18 @@ if __name__ == "__main__":
         print(f"  Total Tokens: {sum(tokens_list)}")
         if throughputs:
             print(f"  Average Throughput: {sum(throughputs)/len(throughputs):.2f} tokens/sec")
+            print(f"  Min Throughput: {min(throughputs):.2f} tokens/sec")
+            print(f"  Max Throughput: {max(throughputs):.2f} tokens/sec")
+        print(f"  Min Tokens: {min(tokens_list)}")
+        print(f"  Max Tokens: {max(tokens_list)}")
+        print(f"  Total Output Chars: {sum(response_lengths)}")
+        print(f"  Min Output Chars: {min(response_lengths)}")
+        print(f"  Max Output Chars: {max(response_lengths)}")
         print(f"  Average Response Length: {sum(response_lengths)/len(response_lengths):.0f} chars")
+        if first_token_speed_list:
+            print(f"  Avg First-token Speed: {sum(first_token_speed_list)/len(first_token_speed_list):.2f} 1/s")
+            print(f"  Min First-token Speed: {min(first_token_speed_list):.2f} 1/s")
+            print(f"  Max First-token Speed: {max(first_token_speed_list):.2f} 1/s")
 
     print(f"\nInput/Frame Size Metrics:")
     print(f"  Average Input Size: {sum(input_chars_list)/len(input_chars_list):.1f} chars")
@@ -1004,6 +1017,15 @@ if __name__ == "__main__":
                 f"ram_delta={ps['ram_delta']:+.2f}MB, gpu_delta={ps['gpu_delta']:+d}MB"
             )
     
+    if kw_results:
+        all_kw_acc = [r['keyword_accuracy'] for r in kw_results]
+        fully_matched = sum(1 for r in kw_results if r.get('keyword_accuracy') == 1.0)
+        print(f"\nKeyword Accuracy ({len(kw_results)} queries with keywords):")
+        print(f"  Average Keyword Accuracy: {sum(all_kw_acc)/len(all_kw_acc):.1%}")
+        print(f"  Min Keyword Accuracy: {min(all_kw_acc):.1%}")
+        print(f"  Max Keyword Accuracy: {max(all_kw_acc):.1%}")
+        print(f"  Fully Matched (100%): {fully_matched}/{len(kw_results)}")
+
     if failed:
         print(f"\nError Analysis:")
         error_types = {}
@@ -1052,7 +1074,18 @@ if __name__ == "__main__":
             f.write(f"  Total Tokens: {sum(tokens_list)}\n")
             if throughputs:
                 f.write(f"  Average Throughput: {sum(throughputs)/len(throughputs):.2f} tokens/sec\n")
+                f.write(f"  Min Throughput: {min(throughputs):.2f} tokens/sec\n")
+                f.write(f"  Max Throughput: {max(throughputs):.2f} tokens/sec\n")
+            f.write(f"  Min Tokens: {min(tokens_list)}\n")
+            f.write(f"  Max Tokens: {max(tokens_list)}\n")
+            f.write(f"  Total Output Chars: {sum(response_lengths)}\n")
+            f.write(f"  Min Output Chars: {min(response_lengths)}\n")
+            f.write(f"  Max Output Chars: {max(response_lengths)}\n")
             f.write(f"  Average Response Length: {sum(response_lengths)/len(response_lengths):.0f} chars\n")
+            if first_token_speed_list:
+                f.write(f"  Avg First-token Speed: {sum(first_token_speed_list)/len(first_token_speed_list):.2f} 1/s\n")
+                f.write(f"  Min First-token Speed: {min(first_token_speed_list):.2f} 1/s\n")
+                f.write(f"  Max First-token Speed: {max(first_token_speed_list):.2f} 1/s\n")
 
         f.write(f"\nInput/Frame Size Metrics:\n")
         f.write(f"  Average Input Size: {sum(input_chars_list)/len(input_chars_list):.1f} chars\n")
@@ -1080,6 +1113,15 @@ if __name__ == "__main__":
                     f"ram_delta={ps['ram_delta']:+.2f}MB, gpu_delta={ps['gpu_delta']:+d}MB\n"
                 )
         
+        if kw_results:
+            all_kw_acc = [r['keyword_accuracy'] for r in kw_results]
+            fully_matched = sum(1 for r in kw_results if r.get('keyword_accuracy') == 1.0)
+            f.write(f"\nKeyword Accuracy ({len(kw_results)} queries with keywords):\n")
+            f.write(f"  Average Keyword Accuracy: {sum(all_kw_acc)/len(all_kw_acc):.1%}\n")
+            f.write(f"  Min Keyword Accuracy: {min(all_kw_acc):.1%}\n")
+            f.write(f"  Max Keyword Accuracy: {max(all_kw_acc):.1%}\n")
+            f.write(f"  Fully Matched (100%): {fully_matched}/{len(kw_results)}\n")
+
         if failed:
             f.write(f"\nError Analysis:\n")
             for error, count in error_types.items():
@@ -1095,7 +1137,9 @@ if __name__ == "__main__":
             cumulative_gpu += r.get("gpu_delta_total_mb", 0)
             f.write(
                 f"Hit {r.get('hit_id', 0):03d}: "
+                f"PerHitRAM={r.get('memory_consumed', 0.0):+.2f}MB, "
                 f"CumRAM={cumulative_ram:+.2f}MB, "
+                f"PerHitGPU={r.get('gpu_delta_total_mb', 0):+d}MB, "
                 f"CumGPU={cumulative_gpu:+d}MB\n"
             )
 
@@ -1160,6 +1204,15 @@ if __name__ == "__main__":
         "avg_input_chars": (sum(input_chars_list) / len(input_chars_list)) if input_chars_list else 0.0,
         "total_ram_delta_mb": sum(ram_delta_list),
         "total_gpu_delta_mb": sum(gpu_delta_total_list),
+        "min_throughput": min(throughputs) if throughputs else 0.0,
+        "max_throughput": max(throughputs) if throughputs else 0.0,
+        "total_output_chars": sum(response_lengths) if successful else 0,
+        "min_output_chars": min(response_lengths) if successful else 0,
+        "max_output_chars": max(response_lengths) if successful else 0,
+        "min_tokens": min(tokens_list) if successful else 0,
+        "max_tokens": max(tokens_list) if successful else 0,
+        "avg_first_token_speed": (sum(first_token_speed_list) / len(first_token_speed_list)) if first_token_speed_list else 0.0,
+        "avg_keyword_accuracy": (sum(r['keyword_accuracy'] for r in kw_results) / len(kw_results)) if kw_results else None,
     }
     screenshot_artifacts = save_metrics_screenshot(summary_payload, all_results, stability_results)
     if screenshot_artifacts.get("png_path"):
