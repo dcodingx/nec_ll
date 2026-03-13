@@ -6,10 +6,10 @@
 
 # vLLM internal dependencies — required by vllm itself, NOT optional. Do NOT remove.
 # fastapi/uvicorn: vLLM's OpenAI API server IS a FastAPI app
-# huggingface_hub: vLLM imports it in arg_utils.py even for local model paths
+# huggingface_hub: vLLM's arg_utils.py imports it; must be <1.0 (transformers pins it)
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
-huggingface_hub>=0.23.0
+huggingface_hub>=0.34.0,<1.0
 
 # Test suite
 requests>=2.31.0

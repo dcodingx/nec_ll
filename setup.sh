@@ -134,8 +134,8 @@ pip install --upgrade pip --quiet
 pip install vllm --quiet
 # vLLM internal hard dependencies — required by vllm itself, do NOT remove:
 #   fastapi/uvicorn : vLLM's OpenAI API server is a FastAPI app
-#   huggingface_hub : vLLM's arg_utils.py imports it even for local model paths
-pip install fastapi "uvicorn[standard]" huggingface_hub --quiet
+#   huggingface_hub : vLLM's arg_utils.py imports it; <1.0 required by transformers
+pip install fastapi "uvicorn[standard]" "huggingface_hub>=0.34.0,<1.0" --quiet
 # Install remaining test/metrics dependencies
 pip install psutil requests matplotlib Pillow --quiet
 deactivate
