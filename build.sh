@@ -260,7 +260,7 @@ exec "${INSTALL_DIR}/.venv/bin/python" -m vllm.entrypoints.openai.api_server \
     --gpu-memory-utilization "${LLM_GPU_MEM}" \
     --max-model-len "${LLM_MAX_LEN:-32768}" \
     --dtype bfloat16 \
-    --disable-log-requests
+    --disable-log-stats
 SECURE_LAUNCHER
 
 chmod 700 "${INSTALL_DIR}/start_vllm_secure.sh"

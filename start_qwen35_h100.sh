@@ -45,5 +45,5 @@ vllm serve "${MODEL}" \
     --gpu-memory-utilization "${GPU_MEM}" \
     --max-model-len "${MAX_LEN}" \
     --dtype bfloat16 \
-    --disable-log-requests \
+    --disable-log-stats \
     2>&1
