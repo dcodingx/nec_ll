@@ -1,231 +1,118 @@
 #!/usr/bin/env bash
 # binary.sh
-# Creates:
-#  1. Systemd service to auto-start vLLM on boot
-#  2. PyInstaller binary packaging for Vocode application
-#  3. Overwrites git repo
+# Creates systemd service for Q3_LLM_V2 auto-start on boot
+# and optionally obfuscates any Python scripts with pyarmor.
 #
-# Run: bash binary.sh
+# Run AFTER setup.sh:
+#   sudo bash binary.sh
 
 set -euo pipefail
 
+if [[ $EUID -ne 0 ]]; then
+    echo "[ERROR] Run with sudo: sudo bash binary.sh"
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV_PATH="/home/venv-qwen35"
-SERVICE_NAME="qwen35-vllm"
+
+# Load config
+for env_file in "${SCRIPT_DIR}/client.env" "${SCRIPT_DIR}/config/client.env"; do
+    [[ -f "${env_file}" ]] && set -a && source "${env_file}" && set +a && break
+done
+
+INSTALL_DIR="${INSTALL_DIR:-/opt/nec_ll}"
+VENV="${INSTALL_DIR}/.venv"
+LLM_MODEL_PATH="${LLM_MODEL_PATH:-/home/models/Q3_LLM_V2}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-Q3_LLM_V2}"
+LLM_PORT="${LLM_PORT:-8004}"
+LLM_GPU_MEM="${LLM_GPU_MEM:-0.72}"
+LLM_MAX_LEN="${LLM_MAX_LEN:-32768}"
+LLM_CUDA_DEVICE="${LLM_CUDA_DEVICE:-0}"
+SERVICE_NAME="voicebot-llm"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║  binary.sh — Service + Binary Packaging                   ║"
+echo "║  binary.sh — Systemd Service + Obfuscation                ║"
 echo "╚════════════════════════════════════════════════════════════╝"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PART 1: Create / update systemd service
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 echo ""
+echo "▶ Step 1: Installing systemd service: ${SERVICE_NAME}"
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PART 1: Create systemd service for vLLM auto-start
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-create_systemd_service() {
-    echo "▶ Creating systemd service: ${SERVICE_NAME}"
-    echo ""
-    
-    # Create service file content
-    SERVICE_CONTENT="[Unit]
-Description=Qwen3.5-27B vLLM Server (OpenAI-compatible API on port 8004)
+tee "${SERVICE_FILE}" > /dev/null <<SVCEOF
+[Unit]
+Description=Q3_LLM_V2 vLLM Server — OpenAI-compatible API (port ${LLM_PORT})
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=${SCRIPT_DIR}
-Environment=\"PATH=${VENV_PATH}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin\"
-Environment=\"CUDA_VISIBLE_DEVICES=0\"
-Environment=\"QWEN35_MODEL=/home/models/Qwen3.5-27B\"
-Environment=\"QWEN35_PORT=8004\"
-Environment=\"QWEN35_GPU_MEM=0.72\"
-Environment=\"QWEN35_MAX_LEN=32768\"
-ExecStart=${SCRIPT_DIR}/start_qwen35_h100.sh
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/client.env
+Environment=CUDA_VISIBLE_DEVICES=${LLM_CUDA_DEVICE}
+ExecStart=${VENV}/bin/python -m vllm.entrypoints.openai.api_server \
+    --model ${LLM_MODEL_PATH} \
+    --served-model-name ${LLM_MODEL_NAME} \
+    --port ${LLM_PORT} \
+    --gpu-memory-utilization ${LLM_GPU_MEM} \
+    --max-model-len ${LLM_MAX_LEN} \
+    --dtype bfloat16 \
+    --disable-log-requests
 Restart=always
-RestartSec=10
+RestartSec=15
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-"
-    
-    echo "$SERVICE_CONTENT" | sudo tee "$SERVICE_FILE" > /dev/null
-    
-    if [ -f "$SERVICE_FILE" ]; then
-        echo "✅ Service file created: $SERVICE_FILE"
-    else
-        echo "❌ Failed to create service file"
-        return 1
-    fi
-    
-    # Reload systemd
-    echo "▶ Reloading systemd daemon..."
-    sudo systemctl daemon-reload
-    
-    # Enable service
-    echo "▶ Enabling service to start on boot..."
-    sudo systemctl enable "$SERVICE_NAME"
-    echo "✅ Service enabled"
-    
-    # Optional: start service now
-    read -p "Start vLLM now? (y/n): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "▶ Starting service..."
-        sudo systemctl start "$SERVICE_NAME"
-        sleep 3
-        sudo systemctl status "$SERVICE_NAME" --no-pager | head -5
-    fi
-}
+SVCEOF
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PART 2: PyInstaller binary packaging (Vocode application)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+systemctl daemon-reload
+systemctl enable "${SERVICE_NAME}"
+echo "✅ Service ${SERVICE_NAME} installed and enabled for auto-start on boot."
 
-create_pyinstaller_binary() {
-    local target_app="$1"
-    local output_name="$2"
-    
-    echo ""
-    echo "▶ PyInstaller binary packaging"
-    echo "  Source: $target_app"
-    echo "  Output: $output_name"
-    echo ""
-    
-    # Check if PyInstaller is installed
-    if ! "${VENV_PATH}/bin/pip" show pyinstaller > /dev/null 2>&1; then
-        echo "▶ Installing PyInstaller..."
-        "${VENV_PATH}/bin/pip" install pyinstaller --quiet
-    fi
-    
-    # Create build directory
-    mkdir -p "${SCRIPT_DIR}/build"
-    mkdir -p "${SCRIPT_DIR}/dist"
-    
-    # Run PyInstaller
-    echo "▶ Running PyInstaller..."
-    "${VENV_PATH}/bin/pyinstaller" \
-        --name "${output_name}" \
-        --onefile \
-        --distpath "${SCRIPT_DIR}/dist" \
-        --buildpath "${SCRIPT_DIR}/build" \
-        --specpath "${SCRIPT_DIR}" \
-        --hidden-import=vllm \
-        --hidden-import=fastapi \
-        --hidden-import=uvicorn \
-        --collect-all=vllm \
-        "${target_app}"
-    
-    if [ -f "${SCRIPT_DIR}/dist/${output_name}" ]; then
-        echo "✅ Binary created: ${SCRIPT_DIR}/dist/${output_name}"
-        ls -lh "${SCRIPT_DIR}/dist/${output_name}"
-    else
-        echo "⚠ Binary creation may have warnings, check build logs"
-    fi
-}
+read -p "Start vLLM now? (y/n): " -n 1 -r; echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    systemctl start "${SERVICE_NAME}"
+    sleep 3
+    systemctl status "${SERVICE_NAME}" --no-pager | head -8
+fi
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# PART 3: Git sync (push current state)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# PART 2: Pyarmor obfuscation (optional)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+echo ""
+read -p "Obfuscate Python scripts with pyarmor? (y/n): " -n 1 -r; echo ""
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "▶ Step 2: Installing pyarmor …"
+    "${VENV}/bin/pip" install pyarmor --quiet
 
-sync_git() {
-    echo ""
-    echo "▶ Syncing with git repository"
-    echo "  Repo: https://github.com/dcodingx/nec_ll.git"
-    echo ""
-    
-    cd "${SCRIPT_DIR}"
-    
-    # Check git status
-    if [ ! -d ".git" ]; then
-        echo "⚠ Not a git repository. Initializing..."
-        git init
-        git remote add origin https://github.com/dcodingx/nec_ll.git
-    fi
-    
-    # Add all files
-    echo "▶ Staging files..."
-    git add -A
-    
-    # Show status
-    git status --short
-    
-    # Ask to commit
-    read -p "Commit and push? (y/n): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
-        git commit -m "Client deployment: Qwen3.5-27B vLLM setup ($TIMESTAMP)" || echo "⚠ No changes to commit"
-        git push -u origin main || git push -u origin master || echo "⚠ Push may have failed"
-        echo "✅ Git sync complete"
-    else
-        echo "Skipped git push"
-    fi
-}
+    OBFUSC_OUT="${INSTALL_DIR}/.obfuscated"
+    mkdir -p "${OBFUSC_OUT}"
+    cd "${INSTALL_DIR}"
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# MAIN EXECUTION
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-main() {
-    # Check prerequisites
-    if [ ! -d "${VENV_PATH}" ]; then
-        echo "❌ Error: venv not found at ${VENV_PATH}"
-        exit 1
-    fi
-    
-    echo "Prerequisites: ✅"
-    echo ""
-    
-    # Step 1: Create systemd service
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║ Step 1: Systemd Service Setup                             ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
-    create_systemd_service
-    
-    # Step 2: PyInstaller binary (optional, for Vocode)
-    echo ""
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║ Step 2: PyInstaller Binary Packaging (Optional)           ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
-    read -p "Package application as binary? (y/n): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        # Check if we have a main app to package
-        if [ -f "llm_api_wrapper_v2.py" ]; then
-            create_pyinstaller_binary "llm_api_wrapper_v2.py" "qwen35-api"
-        elif [ -f "main.py" ]; then
-            create_pyinstaller_binary "main.py" "qwen35-app"
-        else
-            echo "⚠ No main application found for packaging"
+    # Obfuscate test scripts (service uses vllm binary directly — nothing to obfuscate there)
+    for f in test_llm_v2.py; do
+        if [[ -f "${INSTALL_DIR}/${f}" ]]; then
+            echo "  Obfuscating ${f} …"
+            "${VENV}/bin/pyarmor" gen --output "${OBFUSC_OUT}" "${INSTALL_DIR}/${f}"
+            [[ -f "${OBFUSC_OUT}/${f}" ]] && cp "${OBFUSC_OUT}/${f}" "${INSTALL_DIR}/${f}"
+            echo "  ✅ ${f} obfuscated"
         fi
-    fi
-    
-    # Step 3: Git sync
-    echo ""
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║ Step 3: Git Repository Sync                               ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
-    sync_git
-    
-    # Final summary
-    echo ""
-    echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║ ✅ Deployment Complete!                                   ║"
-    echo "╠════════════════════════════════════════════════════════════╣"
-    echo "║ Service: ${SERVICE_NAME}                                   ║"
-    echo "║ Check:   sudo systemctl status ${SERVICE_NAME}            ║"
-    echo "║          sudo systemctl restart ${SERVICE_NAME}           ║"
-    echo "║                                                            ║"
-    echo "║ Logs:    journalctl -u ${SERVICE_NAME} -f                 ║"
-    echo "║                                                            ║"
-    echo "║ API:     http://localhost:8004/v1/chat/completions       ║"
-    echo "║ Docs:    http://localhost:8004/docs                       ║"
-    echo "╚════════════════════════════════════════════════════════════╝"
-}
+    done
+    echo "✅ Obfuscation complete."
+fi
 
-main "$@"
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║ ✅ Done!                                                   ║"
+echo "╠════════════════════════════════════════════════════════════╣"
+echo "║  Service : ${SERVICE_NAME}                                 ║"
+echo "║  Check   : sudo systemctl status ${SERVICE_NAME}          ║"
+echo "║  Restart : sudo systemctl restart ${SERVICE_NAME}         ║"
+echo "║  Logs    : sudo journalctl -u ${SERVICE_NAME} -f          ║"
+echo "║  API     : http://localhost:${LLM_PORT}/v1/models         ║"
+echo "╚════════════════════════════════════════════════════════════╝"

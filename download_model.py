@@ -1,83 +1,44 @@
 #!/usr/bin/env python3
 """
-One-time download of shisa-ai/shisa-v2-qwen2.5-7b from HuggingFace.
+download_model.py — Download Qwen3.5-27B from HuggingFace
 
-Run this ONCE on the client server before starting vLLM.
-The script is idempotent: if the model is already present it exits immediately.
+Downloads to LLM_DOWNLOAD_PATH (default: /home/models/Qwen3.5-27B)
+setup.sh renames it to LLM_MODEL_PATH (default: /home/models/Q3_LLM_V2)
 
-Usage:
-    python download_model.py
+No HF token required — Qwen3.5-27B is publicly available.
 
-Environment overrides (optional):
-    HF_MODEL_ID    — HuggingFace repo id  (default: shisa-ai/shisa-v2-qwen2.5-7b)
-                     NOTE: this is the real HF repo ID, not the served name (LLM_Q3_V1)
-    LLM_MODEL_PATH — local destination   (default: /opt/voicebot/models/LLM_Q3_V1)
-    HF_TOKEN       — HuggingFace token   (not required — model is public)
+Usage (called by setup.sh automatically):
+    python3 download_model.py
 """
 
 import os
 import sys
+from pathlib import Path
 
-HF_MODEL_ID    = os.getenv("HF_MODEL_ID",    "shisa-ai/shisa-v2-qwen2.5-7b")
-LLM_MODEL_PATH = os.getenv("LLM_MODEL_PATH", "/opt/voicebot/models/LLM_Q3_V1")
-HF_TOKEN       = os.getenv("HF_TOKEN",       None)
+HF_MODEL_ID   = os.environ.get("HF_MODEL_ID", "Qwen/Qwen3.5-27B")
+MODEL_PATH     = os.environ.get("LLM_MODEL_PATH", "/home/models/Qwen3.5-27B")
+HF_TOKEN       = os.environ.get("HF_TOKEN", "") or None
 
-SENTINEL_FILE = os.path.join(LLM_MODEL_PATH, "config.json")
+print(f"[download] Model  : {HF_MODEL_ID}")
+print(f"[download] Target : {MODEL_PATH}")
+print(f"[download] Token  : {'set' if HF_TOKEN else 'not required (public model)'}")
 
+try:
+    from huggingface_hub import snapshot_download
+except ImportError:
+    print("[download] Installing huggingface_hub …")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install",
+                           "huggingface_hub>=0.34.0,<1.0", "-q"])
+    from huggingface_hub import snapshot_download
 
-def main():
-    print("=" * 60)
-    print("  LLM_Q3_V1 — Model Download")
-    print("=" * 60)
-    print(f"  Source : {HF_MODEL_ID}")
-    print(f"  Target : {LLM_MODEL_PATH}")
-    print("=" * 60)
+Path(MODEL_PATH).mkdir(parents=True, exist_ok=True)
 
-    # ── Already downloaded? ──────────────────────────────────
-    if os.path.isfile(SENTINEL_FILE):
-        print(f"\n[OK] Model already present at {LLM_MODEL_PATH}")
-        print("     Skipping download.")
-        return
+snapshot_download(
+    repo_id=HF_MODEL_ID,
+    local_dir=MODEL_PATH,
+    token=HF_TOKEN,
+    ignore_patterns=["*.msgpack", "flax_model*", "tf_model*", "*.ot"],
+)
 
-    # ── Import huggingface_hub ───────────────────────────────
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError:
-        print("\n[ERROR] huggingface_hub is not installed.")
-        print("        Run: pip install huggingface_hub")
-        sys.exit(1)
-
-    os.makedirs(LLM_MODEL_PATH, exist_ok=True)
-
-    print(f"\nDownloading {HF_MODEL_ID} …")
-    print("This may take 10–30 minutes depending on bandwidth.\n")
-
-    kwargs = dict(
-        repo_id=HF_MODEL_ID,
-        local_dir=LLM_MODEL_PATH,
-        local_dir_use_symlinks=False,
-    )
-    if HF_TOKEN:
-        kwargs["token"] = HF_TOKEN
-
-    try:
-        snapshot_download(**kwargs)
-    except Exception as exc:
-        print(f"\n[ERROR] Download failed: {exc}")
-        print("Hints:")
-        print("  - If this is a gated model, set HF_TOKEN=<your_token>")
-        print("  - Check your internet connection")
-        print("  - Retry: the download resumes from where it stopped")
-        sys.exit(1)
-
-    if not os.path.isfile(SENTINEL_FILE):
-        print("\n[ERROR] Download finished but config.json not found.")
-        print(f"        Check {LLM_MODEL_PATH} manually.")
-        sys.exit(1)
-
-    print("\n[OK] Model downloaded successfully.")
-    print(f"     Path: {LLM_MODEL_PATH}")
-
-
-if __name__ == "__main__":
-    main()
+print(f"\n[download] ✅ Model downloaded to: {MODEL_PATH}")

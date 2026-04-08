@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# build.sh — LLM_Q3_V1 Security Hardening
+# build.sh — Q3_LLM_V2 Security Hardening
 #
 # Run ONCE on the client AFTER setup.sh has completed:
 #
@@ -31,15 +31,15 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-INSTALL_DIR="/opt/shisa-llm-deploy"
+INSTALL_DIR="/opt/nec_ll"
 VENV="${INSTALL_DIR}/.venv"
 MODEL_STORE="/opt/voicebot/models"
-MODEL_DIR="${MODEL_STORE}/LLM_Q3_V1"
-MODEL_ENC_PREFIX="${MODEL_STORE}/LLM_Q3_V1.bin.enc.part_"
+MODEL_DIR="${MODEL_STORE}/Q3_LLM_V2"
+MODEL_ENC_PREFIX="${MODEL_STORE}/Q3_LLM_V2.bin.enc.part_"
 KEY_DIR="/etc/voicebot"
 KEY_FILE="${KEY_DIR}/model.key"
-LOG="/tmp/shisa_llm_build.log"
-PART_SIZE="1G"    # chunk size for split (git-LFS / transfer friendly)
+LOG="/tmp/nec_ll_build.log"
+PART_SIZE="1G"    # chunk size for split (transfer friendly)
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
 info()    { echo -e "${GREEN}[INFO]${NC}  $*" | tee -a "${LOG}"; }
@@ -49,7 +49,7 @@ section() { echo -e "\n${CYAN}━━━ $* ━━━${NC}" | tee -a "${LOG}"; }
 
 exec > >(tee -a "${LOG}") 2>&1
 echo "============================================================"
-echo "  LLM_Q3_V1 — Security Hardening Build"
+echo "  Q3_LLM_V2 — Security Hardening Build"
 echo "============================================================"
 info "Log: ${LOG}"
 
@@ -86,9 +86,8 @@ mkdir -p "${OBFUSC_OUT}"
 
 cd "${INSTALL_DIR}"
 
-# Only obfuscate the wrapper (contains business logic + system prompts)
-# test_llm_v2.py is a test utility — no sensitive logic, no need to obfuscate
-PYTHON_FILES=("llm_api_wrapper_v2.py")
+# Obfuscate the test client (contains endpoint/model name references)
+PYTHON_FILES=("test_llm_v2.py")
 for f in "${PYTHON_FILES[@]}"; do
     if [[ -f "${INSTALL_DIR}/${f}" ]]; then
         info "Obfuscating ${f} …"
@@ -101,9 +100,7 @@ done
 # Replace originals with obfuscated versions
 info "Installing obfuscated files over originals …"
 if [[ -d "${OBFUSC_OUT}" ]]; then
-    # Copy the pyarmor runtime package
     cp -r "${OBFUSC_OUT}/." "${INSTALL_DIR}/"
-    # Wipe originals that were obfuscated
     for f in "${PYTHON_FILES[@]}"; do
         if [[ -f "${OBFUSC_OUT}/${f}" ]]; then
             cp "${OBFUSC_OUT}/${f}" "${INSTALL_DIR}/${f}"
@@ -111,11 +108,6 @@ if [[ -d "${OBFUSC_OUT}" ]]; then
         fi
     done
 fi
-
-# Remove source references to the real HF model ID
-for f in download_model.py setup.sh run_local.sh; do
-    [[ -f "${INSTALL_DIR}/${f}" ]] && rm -f "${INSTALL_DIR}/${f}" && info "  Removed: ${f}"
-done
 
 info "Python obfuscation complete."
 
@@ -159,7 +151,7 @@ section "3/5  Encrypting model (streaming — no extra disk needed)"
 
 info "Model source : ${MODEL_DIR}"
 info "Encrypted to : ${MODEL_ENC_PREFIX}*"
-info "This will take several minutes for a ~15GB model …"
+info "This will take several minutes for a large model …"
 
 # Skip if already encrypted
 if ls "${MODEL_ENC_PREFIX}"* > /dev/null 2>&1; then
@@ -169,7 +161,7 @@ else
 
 # Stream: tar → openssl AES-256-CBC/PBKDF2 → split into PART_SIZE chunks
 # -pass file: reads passphrase from key file (no key in command line / process list)
-tar -czf - -C "${MODEL_STORE}" "LLM_Q3_V1" | \
+tar -czf - -C "${MODEL_STORE}" "Q3_LLM_V2" | \
     openssl enc -aes-256-cbc -pbkdf2 -iter 100000 \
         -pass "file:${KEY_FILE}" | \
     split -b "${PART_SIZE}" - "${MODEL_ENC_PREFIX}"
@@ -201,10 +193,11 @@ section "5/5  Installing secure launcher and updating systemd"
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 source "${INSTALL_DIR}/client.env" 2>/dev/null || true
-LLM_MODEL_NAME="${LLM_MODEL_NAME:-LLM_Q3_V1}"
+LLM_MODEL_NAME="${LLM_MODEL_NAME:-Q3_LLM_V2}"
 LLM_PORT="${LLM_PORT:-8004}"
 LLM_GPU_MEM="${LLM_GPU_MEM:-0.90}"
 LLM_CUDA_DEVICE="${LLM_CUDA_DEVICE:-0}"
+LLM_MAX_LEN="${LLM_MAX_LEN:-32768}"
 
 RAM_DISK="/dev/shm/llm_runtime"
 
@@ -220,9 +213,9 @@ INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${INSTALL_DIR}/client.env"
 
 KEY_FILE="/etc/voicebot/model.key"
-MODEL_ENC_PREFIX="/opt/voicebot/models/LLM_Q3_V1.bin.enc.part_"
+MODEL_ENC_PREFIX="/opt/voicebot/models/Q3_LLM_V2.bin.enc.part_"
 RAM_DISK="/dev/shm/llm_runtime"
-RAM_MODEL_PATH="${RAM_DISK}/LLM_Q3_V1"
+RAM_MODEL_PATH="${RAM_DISK}/Q3_LLM_V2"
 
 # ── Cleanup: wipe RAM copy on exit ───────────────────────────
 cleanup() {
@@ -265,8 +258,9 @@ exec "${INSTALL_DIR}/.venv/bin/python" -m vllm.entrypoints.openai.api_server \
     --served-model-name "${LLM_MODEL_NAME}" \
     --port "${LLM_PORT}" \
     --gpu-memory-utilization "${LLM_GPU_MEM}" \
-    --max-model-len 8192 \
-    --dtype bfloat16
+    --max-model-len "${LLM_MAX_LEN:-32768}" \
+    --dtype bfloat16 \
+    --disable-log-requests
 SECURE_LAUNCHER
 
 chmod 700 "${INSTALL_DIR}/start_vllm_secure.sh"
@@ -274,8 +268,7 @@ chown root:root "${INSTALL_DIR}/start_vllm_secure.sh"
 info "Installed: ${INSTALL_DIR}/start_vllm_secure.sh"
 
 # Update the systemd service to use the secure launcher
-SERVICE_USER="${SUDO_USER:-$(whoami)}"
-cat > /etc/systemd/system/voicebot-llm.service << EOF
+cat > /etc/systemd/system/voicebot-llm.service << SVCEOF
 [Unit]
 Description=VoiceBot LLM — Secure vLLM Server (${LLM_MODEL_NAME})
 After=network.target
@@ -295,7 +288,7 @@ RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SVCEOF
 
 info "Updated: /etc/systemd/system/voicebot-llm.service"
 systemctl daemon-reload
@@ -307,11 +300,11 @@ echo ""
 echo "============================================================"
 info "Security hardening complete!"
 echo ""
-info "  Python source  : obfuscated (pyarmor)"
-info "  Model at rest  : AES-256-CBC encrypted in ${MODEL_ENC_PREFIX}*"
+info "  Python source   : obfuscated (pyarmor)"
+info "  Model at rest   : AES-256-CBC encrypted in ${MODEL_ENC_PREFIX}*"
 info "  Model at runtime: decrypts to /dev/shm/llm_runtime (RAM only)"
-info "  RAM cleanup    : auto-wipe on service stop/reboot"
-info "  Encryption key : ${KEY_FILE} (root-only, chmod 600)"
+info "  RAM cleanup     : auto-wipe on service stop/reboot"
+info "  Encryption key  : ${KEY_FILE} (root-only, chmod 600)"
 echo ""
 echo -e "${YELLOW}ACTION REQUIRED:${NC}"
 echo -e "  Run: ${CYAN}sudo cat ${KEY_FILE}${NC}"
